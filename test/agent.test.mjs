@@ -1,0 +1,15 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {mkdtemp,stat,rm} from 'node:fs/promises';import {tmpdir} from 'node:os';import {join} from 'node:path';
+import {startAgent,ipc,listAgents} from '../src/agent.mjs';
+test('private IPC reports bounded status and deduplicates follow-ups',async()=>{const dir=await mkdtemp(join(tmpdir(),'pv-'));let sent=[];let now=1000;const a=await startAgent(dir,{id:'session',name:'work',pane:'%1'},text=>sent.push(text),()=>now);try{
+assert.equal((await stat(a.path)).mode&0o777,0o600);assert.equal((await stat(dir)).mode&0o777,0o700);
+a.update({activity:'busy',progress:'x'.repeat(9000)});let s=await ipc(a.path,{op:'status'});assert.equal(s.progress.length,2000);assert.equal(s.stale,false);
+assert.equal((await listAgents(dir)).length,1);
+const msg={op:'message',id:'msg-1',text:'do this'};assert.equal((await ipc(a.path,msg)).receipt,'submitted_unconfirmed');await ipc(a.path,msg);assert.equal(sent.length,1);await assert.rejects(()=>ipc(a.path,{...msg,text:'different'}));
+now+=31000;assert.equal((await ipc(a.path,{op:'status'})).stale,true);await assert.rejects(()=>ipc(a.path,{...msg,id:'msg-2'}));
+}finally{await a.close();await rm(dir,{recursive:true,force:true});}});
+test('delivery exception is indeterminate and never retried under same ID',async()=>{const dir=await mkdtemp(join(tmpdir(),'pv-'));let count=0;const a=await startAgent(dir,{id:'s',name:'x'.repeat(10000)},()=>{count++;throw Error('private');});try{const msg={op:'message',id:'same',text:'instruction'};assert.equal((await ipc(a.path,msg)).receipt,'indeterminate');assert.equal((await ipc(a.path,msg)).receipt,'indeterminate');assert.equal(count,1);assert.ok((await ipc(a.path,{op:'status'})).name.length<=120);}finally{await a.close();await rm(dir,{recursive:true,force:true});}});
+test('IPC rejects oversized instructions and ledger overflow',async()=>{const dir=await mkdtemp(join(tmpdir(),'pv-'));let count=0;const a=await startAgent(dir,{id:'s',name:'s'},()=>count++);try{await assert.rejects(()=>ipc(a.path,{op:'message',id:'big',text:'x'.repeat(4001)}));for(let n=0;n<1000;n++)await ipc(a.path,{op:'message',id:'id'+n,text:'small'});await assert.rejects(()=>ipc(a.path,{op:'message',id:'overflow',text:'small'}));assert.equal(count,1000);}finally{await a.close();await rm(dir,{recursive:true,force:true});}});
+test('excerpt status remains bounded even with JSON-escaped text and heartbeat updates',async()=>{
+const dir=await mkdtemp(join(tmpdir(),'pv-'));const a=await startAgent(dir,{id:'s',name:'s'},()=>{});
+try{a.update({progress:'\u0001'.repeat(2000),recentMessages:Array.from({length:20},()=>({role:'user',text:'\u0001'.repeat(900),timestamp:1,truncated:false,private:'SECRET'}))});a.update();const s=await ipc(a.path,{op:'status'});assert.equal(s.recentMessages.length,8);assert.equal(s.recentMessages[0].text.length,800);assert.equal(s.recentMessages[0].truncated,true);assert.equal(JSON.stringify(s).includes('SECRET'),false);assert.ok(Buffer.byteLength(JSON.stringify(s))<65536);}finally{await a.close();await rm(dir,{recursive:true,force:true});}});

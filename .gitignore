@@ -1,0 +1,29 @@
+# Local configuration, including editor backups and examples
+config*
+**/config.local.*
+.env
+.env.*
+*.env
+
+# Credentials and secrets
+secrets/
+secrets.*
+credentials/
+credentials.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Runtime files and dependencies
+run/
+*.sock
+*.log
+node_modules/
+
+# Editor backups and temporary files
+*~
+*.bak
+*.swp
+*.swo
+.DS_Store
