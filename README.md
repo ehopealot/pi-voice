@@ -6,7 +6,7 @@ Call your Pi agents through a Twilio number and an ElevenLabs voice agent. Get w
 Phone → Twilio → ElevenLabs → HTTPS tunnel → localhost bridge → Pi extension
 ```
 
-The bridge uses Pi's public extension API and private Unix sockets. It lists instrumented Pi instances, not every tmux session. It does not scrape terminal screens, inject keystrokes, or expose shell, start/stop, or approval endpoints.
+The bridge uses Pi's public extension API and private Unix sockets. It lists instrumented Pi instances. It does not scrape terminal screens, inject keystrokes, or expose shell, start/stop, or approval endpoints.
 
 ## Requirements
 
